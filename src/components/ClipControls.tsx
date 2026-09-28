@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import type { FileEntry } from '../lib/supabase'
+import { fileUrl } from '../lib/supabase'
+import { trimVideo } from '../lib/clip'
 
 export type ClipHandle = {
   isClipped: () => boolean
@@ -27,7 +29,7 @@ export function ClipControls({ video, file, handle }: Props) {
   const [inPt, setInPt] = useState(0)
   const [outPt, setOutPt] = useState(0)
   const [looping, setLooping] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [exportPhase, setExportPhase] = useState<'' | 'loading' | 'fetching' | 'trimming'>('')
   const trackRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<'in' | 'out' | null>(null)
   const rafRef = useRef(0)
@@ -152,62 +154,22 @@ export function ClipControls({ video, file, handle }: Props) {
   }, [video, posToTime])
 
   const saveClip = useCallback(async () => {
-    if (!video || exporting) return
-    const capturable = 'captureStream' in video || 'mozCaptureStream' in video
-    if (!capturable) return
-
-    setExporting(true)
-    const wasLooping = clipRef.current.looping
-    setLooping(false)
-    clipRef.current.looping = false
+    if (!video || exportPhase) return
 
     try {
-      video.currentTime = clipRef.current.inPt
-      await new Promise(r => video.addEventListener('seeked', r, { once: true }))
-
-      const stream: MediaStream = (video as any).captureStream?.() ?? (video as any).mozCaptureStream?.()
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-        ? 'video/webm;codecs=vp9,opus'
-        : 'video/webm'
-      const recorder = new MediaRecorder(stream, { mimeType: mime })
-      const chunks: Blob[] = []
-      recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data) }
-
-      const targetOut = clipRef.current.outPt
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        recorder.onstop = () => resolve(new Blob(chunks, { type: mime }))
-        recorder.onerror = () => reject(new Error('Recording failed'))
-        recorder.start()
-        video.play()
-        const check = () => {
-          if (video.currentTime >= targetOut || video.paused) {
-            video.pause()
-            if (recorder.state === 'recording') recorder.stop()
-          } else {
-            requestAnimationFrame(check)
-          }
-        }
-        requestAnimationFrame(check)
-      })
-
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `clip-${file.name.replace(/\.[^.]+$/, '')}.webm`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await trimVideo(
+        fileUrl(file.cloudflare),
+        clipRef.current.inPt,
+        clipRef.current.outPt,
+        file.name,
+        setExportPhase,
+      )
     } catch (err) {
       console.error('Clip export failed:', err)
     } finally {
-      setExporting(false)
-      if (wasLooping) {
-        setLooping(true)
-        clipRef.current.looping = true
-      }
+      setExportPhase('')
     }
-  }, [video, file, exporting])
+  }, [video, file, exportPhase])
 
   useImperativeHandle(handle, () => ({
     isClipped: () => clipRef.current.inPt > 0.05 || clipRef.current.outPt < duration - 0.05,
@@ -261,7 +223,10 @@ export function ClipControls({ video, file, handle }: Props) {
   const outFrac = outPt / duration
   const timeFrac = Math.min(time / duration, 1)
   const clipLen = outPt - inPt
-  const canExport = 'captureStream' in HTMLVideoElement.prototype || 'mozCaptureStream' in HTMLVideoElement.prototype
+  const exportLabel = exportPhase === 'loading' ? '● Loading…'
+    : exportPhase === 'fetching' ? '● Fetching…'
+    : exportPhase === 'trimming' ? '● Trimming…'
+    : '↓ Save clip'
 
   return (
     <div className="clip" onClick={e => e.stopPropagation()}>
@@ -298,11 +263,9 @@ export function ClipControls({ video, file, handle }: Props) {
           ⟲ {looping ? 'Looping' : 'Preview'}
         </button>
         <div className="clip-sep" />
-        {canExport && (
-          <button className="clip-btn" onClick={saveClip} disabled={exporting} title="Record and download clip">
-            {exporting ? '● Recording…' : '↓ Save clip'}
-          </button>
-        )}
+        <button className="clip-btn" onClick={saveClip} disabled={!!exportPhase} title="Trim and download clip">
+          {exportLabel}
+        </button>
         <button className="clip-btn" onClick={reset} title="Reset clip points (R)">↺</button>
       </div>
     </div>
