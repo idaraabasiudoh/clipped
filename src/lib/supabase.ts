@@ -70,6 +70,9 @@ export const createFolder = (name: string, parent: string) =>
 export const addFile = (folder: string, cloudflare: string, name: string) =>
   rpc<FileEntry>('add_file', { p_folder: folder, p_cloudflare: cloudflare, p_name: name })
 
+export const moveItem = (id: string, itemType: 'file' | 'folder', newParent: string) =>
+  rpc<void>('move_item', { p_id: id, p_item_type: itemType, p_new_parent: newParent })
+
 export async function deleteFile(id: string) {
   const { cloudflare } = await rpc<{ cloudflare: string }>('delete_file', { p_id: id })
   await deleteFromR2(cloudflare)

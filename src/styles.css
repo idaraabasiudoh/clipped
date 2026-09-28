@@ -568,6 +568,52 @@ kbd { font: 10.5px var(--mono); letter-spacing: 0.04em; color: var(--float-muted
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Move picker ──────────────────────────────────────────── */
+.mp-overlay {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  animation: fade 0.15s;
+}
+.mp-dialog {
+  width: 360px; max-width: calc(100vw - 32px); max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: var(--float-bg); color: var(--float-fg);
+  border: 1px solid var(--float-line); border-radius: 12px;
+  box-shadow: var(--shadow); overflow: hidden;
+  animation: pop 0.15s ease-out;
+}
+.mp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 12px 10px 18px;
+  font-size: 14px; font-weight: 600;
+}
+.mp-header .icon-btn { color: var(--float-muted); }
+.mp-header .icon-btn:hover { background: var(--float-hover); color: var(--float-fg); }
+.mp-tree {
+  list-style: none; margin: 0; padding: 0 8px;
+  flex: 1; overflow: auto; min-height: 0;
+}
+.mp-tree ul { list-style: none; margin: 0; padding: 0; }
+.mp-row {
+  display: flex; align-items: center; height: 32px; border-radius: 6px;
+  transition: background 0.1s;
+}
+.mp-row:hover:not(.disabled) { background: var(--float-hover); }
+.mp-row.active { background: var(--float-hover); outline: 1.5px solid var(--float-fg); outline-offset: -1.5px; }
+.mp-row.disabled { opacity: 0.35; }
+.mp-row .tree-toggle { color: var(--float-muted); }
+.mp-folder {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  height: 100%; padding: 0 8px 0 4px;
+  background: none; border: 0; text-align: left; font-size: 13px;
+}
+.mp-folder:disabled { cursor: default; }
+.mp-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 10px 14px 14px; border-top: 1px solid var(--float-line);
+}
+
 /* ── Clip controls ─────────────────────────────────────────── */
 .lightbox-clip .lightbox-stage { bottom: 140px; }
 

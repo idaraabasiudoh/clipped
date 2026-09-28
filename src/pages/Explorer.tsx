@@ -15,6 +15,7 @@ import {
   LinkIcon,
   ListIcon,
   MenuIcon,
+  MoveIcon,
   RefreshIcon,
   SearchIcon,
   TrashIcon,
@@ -22,6 +23,7 @@ import {
   XIcon,
 } from '../components/Icons'
 import { Lightbox } from '../components/Lightbox'
+import { MovePicker } from '../components/MovePicker'
 import { Sidebar } from '../components/Sidebar'
 import { UploadTray, type UploadItem } from '../components/UploadTray'
 import { createLogger } from '../lib/debug'
@@ -34,6 +36,7 @@ import {
   fileUrl,
   getFolder,
   getTree,
+  moveItem,
   openFilesystem,
   supabase,
   type FileEntry,
@@ -234,6 +237,11 @@ export function Explorer() {
     return [...folders.sort(compare), ...files.sort(compare)].filter((i) => !q || i.name.toLowerCase().includes(q))
   }, [folder, query, sort])
 
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const selectionRef = useRef(selection)
+  selectionRef.current = selection
+
   const previewFiles = useMemo(() => items.filter((i) => i.file).map((i) => i.file!), [items])
 
   const onSort = (key: SortKey) => setSort((s) => ({ key, asc: s.key === key ? !s.asc : key === 'name' || key === 'kind' }))
@@ -336,6 +344,57 @@ export function Explorer() {
     [notify, refreshTree],
   )
 
+  // ---- Moving ----------------------------------------------------------------------
+
+  const dragItem = useRef<Item | null>(null)
+  const [movePicker, setMovePicker] = useState<Item[] | null>(null)
+
+  const handleMove = useCallback(
+    async (toMove: Item[], targetId: string) => {
+      if (targetId === currentId) return
+      for (const item of toMove) {
+        if (item.type === 'folder' && item.key === targetId) continue
+        try {
+          const itemType = item.type === 'folder' ? 'folder' : 'file'
+          await moveItem(item.key, itemType, targetId)
+          log.info(`Moved "${item.name}" → ${targetId}`)
+        } catch (err) {
+          notify(`Failed to move "${item.name}": ${(err as Error).message}`)
+        }
+      }
+      setFolder((f) => {
+        if (!f) return f
+        const moved = new Set(toMove.map((i) => i.key))
+        return {
+          ...f,
+          content: f.content.filter((c) => {
+            if ('folder' in c) return !moved.has(c.folder.id)
+            if ('file' in c) return !moved.has(c.file.id)
+            return true
+          }),
+        }
+      })
+      setSelection(new Set())
+      refreshTree()
+    },
+    [currentId, notify, refreshTree],
+  )
+
+  const moveDisabledIds = useMemo(() => {
+    if (!movePicker) return new Set<string>()
+    const ids = new Set<string>()
+    ids.add(currentId)
+    for (const item of movePicker) {
+      if (item.type === 'folder') {
+        ids.add(item.key)
+        for (const node of tree) {
+          if (node.path.includes(`/${item.key}/`)) ids.add(node.id)
+        }
+      }
+    }
+    return ids
+  }, [movePicker, currentId, tree])
+
   // ---- Uploading --------------------------------------------------------------------
 
   const [uploads, setUploads] = useState<UploadItem[]>([])
@@ -422,18 +481,20 @@ export function Explorer() {
   useEffect(() => {
     if (fsState.status !== 'ready') return
     let depth = 0
+    const isInternal = (e: DragEvent) => e.dataTransfer?.types.includes('application/x-clipped-move')
     const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files')
     const targetOf = (e: DragEvent) =>
       (e.target instanceof Element && e.target.closest('[data-drop]')?.getAttribute('data-drop')) || null
     const enter = (e: DragEvent) => {
-      if (!hasFiles(e)) return
+      if (!hasFiles(e) && !isInternal(e)) return
       e.preventDefault()
       depth++
       setDragging(true)
     }
     const over = (e: DragEvent) => {
-      if (!hasFiles(e)) return
+      if (!hasFiles(e) && !isInternal(e)) return
       e.preventDefault()
+      if (isInternal(e)) e.dataTransfer!.dropEffect = 'move'
       setDropTarget(targetOf(e))
     }
     const leave = () => {
@@ -444,14 +505,30 @@ export function Explorer() {
       }
     }
     const drop = (e: DragEvent) => {
-      if (!hasFiles(e)) return
       e.preventDefault()
       depth = 0
       setDragging(false)
+      const target = targetOf(e)
       setDropTarget(null)
-      const target = targetOf(e) ?? currentRef.current
-      log.debug(`Dropped ${e.dataTransfer?.files.length} file(s) on ${target}`)
-      if (e.dataTransfer?.files.length) enqueue(e.dataTransfer.files, target)
+
+      if (isInternal(e) && target) {
+        const dragged = dragItem.current
+        if (dragged) {
+          const sel = selectionRef.current
+          const toMove = sel.has(dragged.key)
+            ? itemsRef.current.filter((i) => sel.has(i.key))
+            : [dragged]
+          handleMove(toMove, target)
+        }
+        dragItem.current = null
+        return
+      }
+
+      if (hasFiles(e)) {
+        const dest = target ?? currentRef.current
+        log.debug(`Dropped ${e.dataTransfer?.files.length} file(s) on ${dest}`)
+        if (e.dataTransfer?.files.length) enqueue(e.dataTransfer.files, dest)
+      }
     }
     const paste = (e: ClipboardEvent) => {
       if (e.clipboardData?.files.length) {
@@ -471,7 +548,7 @@ export function Explorer() {
       window.removeEventListener('drop', drop)
       window.removeEventListener('paste', paste)
     }
-  }, [fsState.status, enqueue])
+  }, [fsState.status, enqueue, handleMove])
 
   // ---- Keyboard ----------------------------------------------------------------------
 
@@ -563,13 +640,17 @@ export function Explorer() {
       ]
     }
     if (item.type === 'folder') {
+      const isRoot = item.key === fs
       return [
         { label: 'Open', icon: <FolderGlyph size={16} />, onSelect: () => openItem(item) },
         { label: 'Upload into folder…', icon: <UploadIcon />, onSelect: () => pickFiles(item.key) },
         'separator',
         { label: 'Copy link', icon: <LinkIcon />, onSelect: () => copy(`${location.origin}${pathFor(item.key)}`, 'Link') },
-        'separator',
-        { label: 'Delete folder', icon: <TrashIcon />, onSelect: () => deleteItems([item]) },
+        ...(!isRoot ? [
+          'separator' as const,
+          { label: 'Move to…', icon: <MoveIcon />, onSelect: () => setMovePicker([item]) },
+          { label: 'Delete folder', icon: <TrashIcon />, onSelect: () => deleteItems([item]) },
+        ] : []),
       ]
     }
     const file = item.file!
@@ -586,6 +667,7 @@ export function Explorer() {
       'separator',
       { label: 'Copy file link', icon: <LinkIcon />, onSelect: () => copy(fileUrl(file.cloudflare), 'File link') },
       'separator',
+      { label: 'Move to…', icon: <MoveIcon />, onSelect: () => setMovePicker([item]) },
       { label: 'Delete', icon: <TrashIcon />, onSelect: () => deleteItems([item]) },
     ]
   }
@@ -760,6 +842,7 @@ export function Explorer() {
               onItemContext={onItemContext}
               onCreateCommit={commitNewFolder}
               onCreateCancel={() => setCreating(false)}
+              onDragItem={(item) => { dragItem.current = item }}
             />
           )}
         </div>
@@ -767,8 +850,21 @@ export function Explorer() {
         {dragging && (
           <div className={`drop-frame ${dropTarget ? 'targeted' : ''}`} aria-hidden>
             <span className="drop-pill">
-              <UploadIcon width={15} height={15} /> Release to upload
-              <b>→ {(dropTarget && (tree.find((t) => t.id === dropTarget)?.name ?? items.find((i) => i.key === dropTarget)?.name)) || folder?.name || fs}</b>
+              {dragItem.current ? (
+                <>
+                  <MoveIcon width={15} height={15} /> {dropTarget ? 'Move' : 'Drop on a folder to move'}
+                </>
+              ) : (
+                <>
+                  <UploadIcon width={15} height={15} /> Release to upload
+                </>
+              )}
+              {dropTarget && (
+                <b>→ {tree.find((t) => t.id === dropTarget)?.name ?? items.find((i) => i.key === dropTarget)?.name ?? dropTarget}</b>
+              )}
+              {!dropTarget && !dragItem.current && (
+                <b>→ {folder?.name || fs}</b>
+              )}
             </span>
           </div>
         )}
@@ -806,6 +902,18 @@ export function Explorer() {
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.item)} onClose={closeMenu} />}
       {preview !== null && preview >= 0 && (
         <Lightbox files={previewFiles} index={preview} onIndex={setPreview} onClose={closePreview} />
+      )}
+      {movePicker && (
+        <MovePicker
+          fs={fs}
+          tree={tree}
+          disabledIds={moveDisabledIds}
+          onSelect={(targetId) => {
+            handleMove(movePicker, targetId)
+            setMovePicker(null)
+          }}
+          onClose={() => setMovePicker(null)}
+        />
       )}
       <UploadTray items={uploads} onDismiss={() => setUploads([])} />
       {toast && <div className="toast">{toast}</div>}

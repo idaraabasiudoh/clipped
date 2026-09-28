@@ -129,6 +129,9 @@ export const RefreshIcon = (p: P) => (
 export const EjectIcon = (p: P) => (
   <svg {...base(p)}><path d="M12 5l7 8H5z" /><path d="M5 18h14" /></svg>
 )
+export const MoveIcon = (p: P) => (
+  <svg {...base(p)}><path d="M15 3h6v6" /><path d="M10 14L21 3" /><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /></svg>
+)
 export const TrashIcon = (p: P) => (
   <svg {...base(p)}><path d="M3 6h18" /><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
 )

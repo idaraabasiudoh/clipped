@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import React, { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { fileUrl, type FileEntry } from '../lib/supabase'
 import { formatBytes, formatDate } from '../lib/util'
 import { ChevronDown, ChevronUp, FileGlyph, FolderGlyph, PlayIcon } from './Icons'
@@ -29,6 +29,7 @@ type Props = {
   onItemContext: (e: MouseEvent, item: Item) => void
   onCreateCommit: (name: string) => void
   onCreateCancel: () => void
+  onDragItem?: (item: Item) => void
 }
 
 const COLUMNS: { key: SortKey; label: string; className: string }[] = [
@@ -39,13 +40,14 @@ const COLUMNS: { key: SortKey; label: string; className: string }[] = [
 ]
 
 export function FileView(props: Props) {
-  const { view, items, selection, dropTarget, creating, onItemClick, onItemOpen, onItemContext } = props
+  const { view, items, selection, dropTarget, creating, onItemClick, onItemOpen, onItemContext, onDragItem } = props
 
   const rowProps = (item: Item, index: number) => ({
     id: `item-${item.key}`,
     'data-drop': item.type === 'folder' ? item.key : undefined,
     'aria-selected': selection.has(item.key),
     role: 'row' as const,
+    draggable: true,
     className: [
       view === 'list' ? 'row-item' : 'tile',
       selection.has(item.key) && 'selected',
@@ -62,6 +64,11 @@ export function FileView(props: Props) {
       e.preventDefault()
       e.stopPropagation()
       onItemContext(e, item)
+    },
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData('application/x-clipped-move', item.key)
+      e.dataTransfer.effectAllowed = 'move'
+      onDragItem?.(item)
     },
   })
 
