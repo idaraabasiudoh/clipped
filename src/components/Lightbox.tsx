@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { downloadUrl, fileKind, fileUrl, type FileEntry } from '../lib/supabase'
 import { ClipControls, type ClipHandle } from './ClipControls'
 import { ChevronLeft, ChevronRight, DownloadIcon, XIcon } from './Icons'
@@ -17,6 +17,15 @@ export function Lightbox({ files, index, onIndex, onClose }: Props) {
   const isVideo = file ? fileKind(file) === 'video' : false
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
   const clipHandle = useRef<ClipHandle | null>(null)
+  const [mediaLoaded, setMediaLoaded] = useState(false)
+  const [clipState, setClipState] = useState({ clipped: false, exporting: false })
+  const showSpinner = !mediaLoaded || clipState.exporting
+
+  useEffect(() => { setMediaLoaded(false) }, [index])
+
+  const onClipStateChange = useCallback((s: { clipped: boolean; exporting: boolean }) => {
+    setClipState(s)
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,31 +66,35 @@ export function Lightbox({ files, index, onIndex, onClose }: Props) {
           </span>
         </div>
         <div className="row">
-          <button
-            className="icon-btn on-dark"
-            title="Download"
-            onClick={() => {
-              if (videoEl && !videoEl.paused) videoEl.pause()
-              if (clipHandle.current?.isClipped()) {
-                clipHandle.current.exportClip()
-              } else {
+          {!clipState.clipped && (
+            <button
+              className="icon-btn on-dark"
+              title="Download original"
+              onClick={() => {
+                if (videoEl && !videoEl.paused) videoEl.pause()
                 const a = document.createElement('a')
                 a.href = downloadUrl(file.cloudflare, file.name)
                 a.click()
-              }
-            }}
-          >
-            <DownloadIcon />
-          </button>
+              }}
+            >
+              <DownloadIcon />
+            </button>
+          )}
           <button className="icon-btn on-dark" onClick={onClose} title="Close (Esc)">
             <XIcon />
           </button>
         </div>
       </header>
 
+      {showSpinner && (
+        <div className="lightbox-spinner" onClick={e => e.stopPropagation()}>
+          <div className="spinner" />
+        </div>
+      )}
+
       <div className="lightbox-stage">
         {fileKind(file) === 'picture' ? (
-          <img key={file.id} src={src} alt={file.name} onClick={(e) => e.stopPropagation()} />
+          <img key={file.id} src={src} alt={file.name} onClick={(e) => e.stopPropagation()} onLoad={() => setMediaLoaded(true)} />
         ) : (
           <video
             key={file.id}
@@ -91,6 +104,7 @@ export function Lightbox({ files, index, onIndex, onClose }: Props) {
             autoPlay
             playsInline
             preload="auto"
+            onCanPlay={() => setMediaLoaded(true)}
             onClick={(e) => {
               e.stopPropagation()
               if (e.currentTarget.paused) e.currentTarget.play()
@@ -100,7 +114,7 @@ export function Lightbox({ files, index, onIndex, onClose }: Props) {
         )}
       </div>
 
-      {isVideo && <ClipControls key={file.id} video={videoEl} file={file} handle={clipHandle} />}
+      {isVideo && <ClipControls key={file.id} video={videoEl} file={file} handle={clipHandle} onStateChange={onClipStateChange} />}
 
       {hasPrev && (
         <button

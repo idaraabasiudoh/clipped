@@ -12,6 +12,7 @@ type Props = {
   video: HTMLVideoElement | null
   file: FileEntry
   handle?: Ref<ClipHandle | null>
+  onStateChange?: (state: { clipped: boolean; exporting: boolean }) => void
 }
 
 function fmt(s: number): string {
@@ -22,7 +23,7 @@ function fmt(s: number): string {
   return `${m}:${String(sec).padStart(2, '0')}.${d}`
 }
 
-export function ClipControls({ video, file, handle }: Props) {
+export function ClipControls({ video, file, handle, onStateChange }: Props) {
   const [duration, setDuration] = useState(0)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -173,10 +174,16 @@ export function ClipControls({ video, file, handle }: Props) {
     }
   }, [video, file, exportPhase])
 
+  const isClipped = duration > 0 && (inPt > 0.05 || outPt < duration - 0.05)
+
+  useEffect(() => {
+    onStateChange?.({ clipped: isClipped, exporting: !!exportPhase })
+  }, [isClipped, exportPhase, onStateChange])
+
   useImperativeHandle(handle, () => ({
-    isClipped: () => clipRef.current.inPt > 0.05 || clipRef.current.outPt < duration - 0.05,
+    isClipped: () => isClipped,
     exportClip: saveClip,
-  }), [duration, saveClip])
+  }), [isClipped, saveClip])
 
   // Keyboard shortcuts
   useEffect(() => {

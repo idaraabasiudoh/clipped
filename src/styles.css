@@ -553,6 +553,21 @@ kbd { font: 10.5px var(--mono); letter-spacing: 0.04em; color: var(--float-muted
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
+/* ── Lightbox spinner ──────────────────────────────────────── */
+.lightbox-spinner {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── Clip controls ─────────────────────────────────────────── */
 .lightbox-clip .lightbox-stage { bottom: 140px; }
 
