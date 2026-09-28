@@ -39,7 +39,8 @@ export async function trimVideo(
   ])
 
   const output = await ffmpeg.readFile(outputName) as Uint8Array
-  const blob = new Blob([output], { type: `video/${ext === 'mov' ? 'quicktime' : ext}` })
+  const buf = output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength) as ArrayBuffer
+  const blob = new Blob([buf], { type: `video/${ext === 'mov' ? 'quicktime' : ext}` })
 
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
