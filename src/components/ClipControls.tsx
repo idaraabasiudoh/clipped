@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import type { FileEntry } from '../lib/supabase'
+
+export type ClipHandle = {
+  isClipped: () => boolean
+  exportClip: () => Promise<void>
+}
 
 type Props = {
   video: HTMLVideoElement | null
   file: FileEntry
+  handle?: Ref<ClipHandle | null>
 }
 
 function fmt(s: number): string {
@@ -14,7 +20,7 @@ function fmt(s: number): string {
   return `${m}:${String(sec).padStart(2, '0')}.${d}`
 }
 
-export function ClipControls({ video, file }: Props) {
+export function ClipControls({ video, file, handle }: Props) {
   const [duration, setDuration] = useState(0)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -202,6 +208,11 @@ export function ClipControls({ video, file }: Props) {
       }
     }
   }, [video, file, exporting])
+
+  useImperativeHandle(handle, () => ({
+    isClipped: () => clipRef.current.inPt > 0.05 || clipRef.current.outPt < duration - 0.05,
+    exportClip: saveClip,
+  }), [duration, saveClip])
 
   // Keyboard shortcuts
   useEffect(() => {
