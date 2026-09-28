@@ -138,19 +138,42 @@ export default {
         const key = path.slice('/file/'.length)
         if (!key) return err('Missing key', cors)
 
-        const obj = await env.MEDIA.get(key)
+        const rangeHeader = request.headers.get('Range')
+        let rangeOffset: number | undefined
+        let rangeLength: number | undefined
+        const opts: R2GetOptions = {}
+        if (rangeHeader) {
+          const m = rangeHeader.match(/^bytes=(\d+)-(\d*)$/)
+          if (m) {
+            rangeOffset = Number(m[1])
+            rangeLength = m[2] ? Number(m[2]) - rangeOffset + 1 : undefined
+            opts.range = rangeLength
+              ? { offset: rangeOffset, length: rangeLength }
+              : { offset: rangeOffset }
+          }
+        }
+
+        const obj = await env.MEDIA.get(key, opts)
         if (!obj) return new Response('Not found', { status: 404, headers: cors })
 
+        const totalSize = obj.size
         const headers = new Headers(cors)
         headers.set('Content-Type', obj.httpMetadata?.contentType || 'application/octet-stream')
         headers.set('Cache-Control', 'public, max-age=31536000, immutable')
         headers.set('ETag', obj.etag)
-
-        if (obj.size !== undefined) headers.set('Content-Length', String(obj.size))
+        headers.set('Accept-Ranges', 'bytes')
 
         const dl = url.searchParams.get('download')
         if (dl) headers.set('Content-Disposition', `attachment; filename="${dl}"`)
 
+        if (rangeOffset !== undefined && totalSize !== undefined) {
+          const end = rangeLength ? rangeOffset + rangeLength - 1 : totalSize - 1
+          headers.set('Content-Length', String(end - rangeOffset + 1))
+          headers.set('Content-Range', `bytes ${rangeOffset}-${end}/${totalSize}`)
+          return new Response(obj.body, { status: 206, headers })
+        }
+
+        if (totalSize !== undefined) headers.set('Content-Length', String(totalSize))
         return new Response(obj.body, { headers })
       }
 
