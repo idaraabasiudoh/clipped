@@ -85,7 +85,7 @@ export function MovePicker({ fs, tree, disabledIds, onSelect, onClose }: Props) 
         </header>
         <ul className="mp-tree">{renderNode(fs, fs, 0)}</ul>
         <footer className="mp-footer">
-          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{ background: '#000', color: '#fff' }} onClick={onClose}>Cancel</button>
           <button
             className="btn primary"
             disabled={!selected}
