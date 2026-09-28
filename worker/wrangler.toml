@@ -1,0 +1,7 @@
+name = "clipped-media"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "clipped-media"

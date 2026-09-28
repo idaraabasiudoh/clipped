@@ -1,0 +1,14 @@
+{
+  "name": "clipped-media-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "wrangler": "^3.99.0"
+  }
+}

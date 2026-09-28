@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+*.log
+
+# Local env — your Supabase keys live here
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.claude
+.mcp.json
+supabase/.temp
