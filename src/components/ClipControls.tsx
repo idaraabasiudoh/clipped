@@ -156,6 +156,8 @@ export function ClipControls({ video, file, handle }: Props) {
   const saveClip = useCallback(async () => {
     if (!video || exportPhase) return
 
+    if (!video.paused) video.pause()
+
     try {
       await trimVideo(
         fileUrl(file.cloudflare),

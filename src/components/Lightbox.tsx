@@ -61,6 +61,7 @@ export function Lightbox({ files, index, onIndex, onClose }: Props) {
             className="icon-btn on-dark"
             title="Download"
             onClick={() => {
+              if (videoEl && !videoEl.paused) videoEl.pause()
               if (clipHandle.current?.isClipped()) {
                 clipHandle.current.exportClip()
               } else {
