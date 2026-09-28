@@ -17,6 +17,7 @@ import {
   MenuIcon,
   RefreshIcon,
   SearchIcon,
+  TrashIcon,
   UploadIcon,
   XIcon,
 } from '../components/Icons'
@@ -26,6 +27,8 @@ import { UploadTray, type UploadItem } from '../components/UploadTray'
 import { createLogger } from '../lib/debug'
 import {
   createFolder,
+  deleteFile,
+  deleteFolder,
   downloadUrl,
   fileKind,
   fileUrl,
@@ -298,6 +301,41 @@ export function Explorer() {
     }
   }
 
+  // ---- Deleting ---------------------------------------------------------------------
+
+  const deleteItems = useCallback(
+    async (toDelete: Item[]) => {
+      for (const item of toDelete) {
+        try {
+          if (item.type === 'folder') {
+            await deleteFolder(item.key)
+            log.info(`Deleted folder "${item.name}"`)
+          } else {
+            await deleteFile(item.key)
+            log.info(`Deleted file "${item.name}"`)
+          }
+        } catch (err) {
+          notify(`Failed to delete "${item.name}": ${(err as Error).message}`)
+        }
+      }
+      setFolder((f) => {
+        if (!f) return f
+        const deleted = new Set(toDelete.map((i) => i.key))
+        return {
+          ...f,
+          content: f.content.filter((c) => {
+            if ('folder' in c) return !deleted.has(c.folder.id)
+            if ('file' in c) return !deleted.has(c.file.id)
+            return true
+          }),
+        }
+      })
+      setSelection(new Set())
+      refreshTree()
+    },
+    [notify, refreshTree],
+  )
+
   // ---- Uploading --------------------------------------------------------------------
 
   const [uploads, setUploads] = useState<UploadItem[]>([])
@@ -530,6 +568,8 @@ export function Explorer() {
         { label: 'Upload into folder…', icon: <UploadIcon />, onSelect: () => pickFiles(item.key) },
         'separator',
         { label: 'Copy link', icon: <LinkIcon />, onSelect: () => copy(`${location.origin}${pathFor(item.key)}`, 'Link') },
+        'separator',
+        { label: 'Delete folder', icon: <TrashIcon />, onSelect: () => deleteItems([item]) },
       ]
     }
     const file = item.file!
@@ -545,6 +585,8 @@ export function Explorer() {
       },
       'separator',
       { label: 'Copy file link', icon: <LinkIcon />, onSelect: () => copy(fileUrl(file.cloudflare), 'File link') },
+      'separator',
+      { label: 'Delete', icon: <TrashIcon />, onSelect: () => deleteItems([item]) },
     ]
   }
 

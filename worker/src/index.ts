@@ -155,6 +155,17 @@ export default {
       }
 
       // ------------------------------------------------------------------
+      // DELETE /file/<key>  —  delete a file from R2
+      // ------------------------------------------------------------------
+      if (request.method === 'DELETE' && path.startsWith('/file/')) {
+        const key = path.slice('/file/'.length)
+        if (!key) return err('Missing key', cors)
+
+        await env.MEDIA.delete(key)
+        return json({ deleted: key }, cors)
+      }
+
+      // ------------------------------------------------------------------
       // HEAD /file/<key>  —  check existence
       // ------------------------------------------------------------------
       if (request.method === 'HEAD' && path.startsWith('/file/')) {

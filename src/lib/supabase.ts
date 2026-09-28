@@ -70,6 +70,20 @@ export const createFolder = (name: string, parent: string) =>
 export const addFile = (folder: string, cloudflare: string, name: string) =>
   rpc<FileEntry>('add_file', { p_folder: folder, p_cloudflare: cloudflare, p_name: name })
 
+export async function deleteFile(id: string) {
+  const { cloudflare } = await rpc<{ cloudflare: string }>('delete_file', { p_id: id })
+  await deleteFromR2(cloudflare)
+}
+
+export async function deleteFolder(id: string) {
+  const { keys } = await rpc<{ keys: string[] }>('delete_folder', { p_id: id })
+  await Promise.allSettled(keys.map(deleteFromR2))
+}
+
+async function deleteFromR2(key: string) {
+  await fetch(`${R2_WORKER_URL}/file/${encodeURI(key)}`, { method: 'DELETE' })
+}
+
 export function fileUrl(cloudflare: string) {
   return `${R2_WORKER_URL}/file/${encodeURI(cloudflare)}`
 }
